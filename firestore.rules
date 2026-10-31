@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if the current user is the owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Notes collection
+    match /notes/{noteId} {
+      // Owner can read, write, update, delete
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Allow read if user is owner OR note is shared and not expired
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) ||
+                    (resource.data.isShared == true &&
+                     (resource.data.shareExpiresAt == null || resource.data.shareExpiresAt > request.time.toMillis()));
+    }
+
+    // User profile documents
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+  }
+}
